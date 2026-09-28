@@ -1,1 +1,40 @@
+name: Build GBA ROM
 
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: devkitpro/devkitarm:latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the ROM
+        run: |
+          export PATH="$DEVKITARM/bin:$DEVKITPRO/tools/bin:$PATH"
+          mkdir -p build
+          arm-none-eabi-gcc -mthumb -mthumb-interwork -O2 -Wall -specs=gba.specs main.c -o build/game.elf
+          arm-none-eabi-objcopy -O binary build/game.elf build/game.gba
+          if ! command -v gbafix >/dev/null 2>&1; then
+            dkp-pacman -Sy --noconfirm gba-tools || true
+          fi
+          gbafix build/game.gba || echo "gbafix not available, continuing without it"
+          ls -l build
+
+      - name: Keep a copy with the run
+        uses: actions/upload-artifact@v4
+        with:
+          name: game-rom
+          path: build/game.gba
+
+      - name: Publish as a release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest ROM
+          files: build/game.gba
